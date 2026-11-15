@@ -15,25 +15,38 @@ import org.robolectric.annotation.Config
 class ExampleRobolectricTest {
 
     @Test
-    fun `read app_name from context and verify Imou RTSP URL generation`() {
+    fun `read app_name and verify 3-lens and 2-lens RTSP URLs`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val appName = context.getString(R.string.app_name)
         assertEquals("Imou LAN", appName)
 
         val camera = ImouCameraEntity(
-            name = "Main Gate",
-            modelName = "Imou Cruiser SE+",
+            name = "Main Gate 3-Lens",
+            modelName = "Imou Cruiser Triple 3-Lens",
             ipAddress = "192.168.1.108",
             rtspPort = 554,
             username = "admin",
             safetyCode = "L28A9F4C",
-            channel = 1,
+            lensCount = 3,
+            lens1Channel = 1,
+            lens2Channel = 2,
+            lens3Channel = 3,
+            ptzControlChannel = 3,
             preferredSubtype = 0
         )
+        assertEquals(3, camera.getLensDescriptors().size)
         assertEquals(
             "rtsp://admin:L28A9F4C@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0",
-            camera.buildRtspUrl()
+            camera.buildRtspUrlForChannel(1)
         )
-        assertTrue(camera.buildMaskedRtspUrl().contains("••••••••"))
+        assertEquals(
+            "rtsp://admin:L28A9F4C@192.168.1.108:554/cam/realmonitor?channel=2&subtype=0",
+            camera.buildRtspUrlForChannel(2)
+        )
+        assertEquals(
+            "rtsp://admin:L28A9F4C@192.168.1.108:554/cam/realmonitor?channel=3&subtype=0",
+            camera.buildRtspUrlForChannel(3)
+        )
+        assertTrue(camera.buildMaskedRtspUrl(2).contains("••••••••"))
     }
 }

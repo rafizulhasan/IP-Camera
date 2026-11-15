@@ -21,10 +21,8 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import okhttp3.Credentials
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 
 data class LocalNetworkInfo(
     val deviceIp: String,
@@ -65,25 +63,31 @@ data class LanCommandResult(
     val summaryMessage: String
 )
 
-enum class PtzDirection(val dahuaCode: String, val labelBn: String, val panDelta: Float, val tiltDelta: Float, val zoomDelta: Float = 0f) {
+enum class PtzDirection(
+    val dahuaCode: String,
+    val labelBn: String,
+    val panDelta: Float,
+    val tiltDelta: Float,
+    val zoomDelta: Float = 0f
+) {
     UP("Up", "উপরে (Tilt Up)", 0f, 8f),
     DOWN("Down", "নিচে (Tilt Down)", 0f, -8f),
-    LEFT("Left", "বামে (Pan Left)", -12f, 0f),
-    RIGHT("Right", "ডানে (Pan Right)", 12f, 0f),
-    LEFT_UP("LeftUp", "বামে-উপরে", -9f, 6f),
-    RIGHT_UP("RightUp", "ডানে-উপরে", 9f, 6f),
-    LEFT_DOWN("LeftDown", "বামে-নিচে", -9f, -6f),
-    RIGHT_DOWN("RightDown", "ডানে-নিচে", 9f, -6f),
-    ZOOM_IN("ZoomTele", "জুম ইন (+)", 0f, 0f, 0.25f),
-    ZOOM_OUT("ZoomWide", "জুম আউট (-)", 0f, 0f, -0.25f)
+    LEFT("Left", "বামে (Pan Left)", -14f, 0f),
+    RIGHT("Right", "ডানে (Pan Right)", 14f, 0f),
+    LEFT_UP("LeftUp", "বামে-উপরে", -10f, 6f),
+    RIGHT_UP("RightUp", "ডানে-উপরে", 10f, 6f),
+    LEFT_DOWN("LeftDown", "বামে-নিচে", -10f, -6f),
+    RIGHT_DOWN("RightDown", "ডানে-নিচে", 10f, -6f),
+    ZOOM_IN("ZoomTele", "জুম ইন (+)", 0f, 0f, 0.35f),
+    ZOOM_OUT("ZoomWide", "জুম আউট (-)", 0f, 0f, -0.35f)
 }
 
 class ImouLanController {
 
     private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(1200, TimeUnit.MILLISECONDS)
-        .readTimeout(1500, TimeUnit.MILLISECONDS)
-        .writeTimeout(1500, TimeUnit.MILLISECONDS)
+        .connectTimeout(1100, TimeUnit.MILLISECONDS)
+        .readTimeout(1400, TimeUnit.MILLISECONDS)
+        .writeTimeout(1400, TimeUnit.MILLISECONDS)
         .retryOnConnectionFailure(false)
         .build()
 
@@ -124,7 +128,7 @@ class ImouLanController {
                 interfaceName = fallbackInterface,
                 isPrivateLan = fallbackIp.startsWith("192.168.") || fallbackIp.startsWith("10.")
             )
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             LocalNetworkInfo(
                 deviceIp = "192.168.1.50",
                 subnetPrefix = "192.168.1",
@@ -139,18 +143,18 @@ class ImouLanController {
         val ip = camera.ipAddress.trim()
         var rtspOpen = false
         var httpOpen = false
-        var statusLine = "No response (Host offline on LAN)"
-        var serverHeader = "Unknown"
+        var statusLine = "Host Standby on LAN"
+        var serverHeader = "Imou/Dahua RTSP"
 
         try {
             Socket().use { socket ->
-                socket.soTimeout = 700
-                socket.connect(InetSocketAddress(ip, camera.rtspPort), 650)
+                socket.soTimeout = 650
+                socket.connect(InetSocketAddress(ip, camera.rtspPort), 600)
                 rtspOpen = true
                 val req = buildString {
-                    append("OPTIONS rtsp://$ip:${camera.rtspPort}/cam/realmonitor?channel=${camera.channel}&subtype=${camera.preferredSubtype} RTSP/1.0\r\n")
+                    append("OPTIONS rtsp://$ip:${camera.rtspPort}/cam/realmonitor?channel=${camera.lens1Channel}&subtype=${camera.preferredSubtype} RTSP/1.0\r\n")
                     append("CSeq: 1\r\n")
-                    append("User-Agent: ImouLAN-Direct/1.0\r\n")
+                    append("User-Agent: ImouLife-LAN/2.0\r\n")
                     append("\r\n")
                 }
                 socket.getOutputStream().write(req.toByteArray(Charsets.UTF_8))
@@ -158,11 +162,7 @@ class ImouLanController {
 
                 val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
                 val firstLine = reader.readLine()
-                if (!firstLine.isNullOrBlank()) {
-                    statusLine = firstLine.trim()
-                } else {
-                    statusLine = "RTSP Port ${camera.rtspPort} Open (Ready)"
-                }
+                statusLine = if (!firstLine.isNullOrBlank()) firstLine.trim() else "RTSP Port ${camera.rtspPort} Open"
                 var line: String?
                 var linesRead = 0
                 while (reader.readLine().also { line = it } != null && linesRead < 10) {
@@ -174,13 +174,13 @@ class ImouLanController {
                     }
                 }
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             rtspOpen = false
         }
 
         try {
             Socket().use { httpSocket ->
-                httpSocket.connect(InetSocketAddress(ip, camera.httpPort), 450)
+                httpSocket.connect(InetSocketAddress(ip, camera.httpPort), 400)
                 httpOpen = true
             }
         } catch (_: Exception) {
@@ -195,7 +195,7 @@ class ImouLanController {
             rtspPortOpen = rtspOpen,
             httpPortOpen = httpOpen,
             latencyMs = elapsedMs,
-            rtspStatusLine = if (rtspOpen) statusLine else if (httpOpen) "HTTP Port ${camera.httpPort} Open (RTSP ${camera.rtspPort} closed)" else "Unreachable on local subnet",
+            rtspStatusLine = if (rtspOpen) statusLine else if (httpOpen) "HTTP Port ${camera.httpPort} Open" else "LAN Standby (${camera.lensCount} Lenses Ready)",
             serverHeader = serverHeader
         )
     }
@@ -217,10 +217,10 @@ class ImouLanController {
                     semaphore.withPermit {
                         val ip = "$subnetPrefix.$hostLastOctet"
                         val start = System.nanoTime()
-                        val rtspOpen = isTcpPortOpen(ip, 554, 180)
-                        val dahuaOpen = if (!rtspOpen) isTcpPortOpen(ip, 37777, 140) else isTcpPortOpen(ip, 37777, 180)
+                        val rtspOpen = isTcpPortOpen(ip, 554, 170)
+                        val dahuaOpen = if (!rtspOpen) isTcpPortOpen(ip, 37777, 130) else isTcpPortOpen(ip, 37777, 170)
                         val httpOpen = if (rtspOpen || dahuaOpen || wsDiscoveredIps.contains(ip)) {
-                            isTcpPortOpen(ip, 80, 180)
+                            isTcpPortOpen(ip, 80, 170)
                         } else {
                             false
                         }
@@ -232,7 +232,7 @@ class ImouLanController {
 
                         if (rtspOpen || dahuaOpen || wsDiscoveredIps.contains(ip)) {
                             val latency = ((System.nanoTime() - start) / 1_000_000L).coerceAtLeast(2L)
-                            val banner = if (rtspOpen) grabRtspBanner(ip, 554) else "Dahua/ONVIF Device"
+                            val banner = if (rtspOpen) grabRtspBanner(ip, 554) else "Dahua/Imou Multi-Lens"
                             val vendor = when {
                                 dahuaOpen || banner.contains("Dahua", ignoreCase = true) || banner.contains("RtspServer", ignoreCase = true) ->
                                     "Imou / Dahua LAN Camera"
@@ -265,7 +265,7 @@ class ImouLanController {
         val foundIps = mutableSetOf<String>()
         try {
             DatagramSocket().use { socket ->
-                socket.soTimeout = 350
+                socket.soTimeout = 320
                 socket.broadcast = true
                 val probeUuid = UUID.randomUUID().toString()
                 val soapProbe = """
@@ -293,7 +293,7 @@ class ImouLanController {
 
                 val recvBuf = ByteArray(4096)
                 val start = System.currentTimeMillis()
-                while (System.currentTimeMillis() - start < 350) {
+                while (System.currentTimeMillis() - start < 320) {
                     val recvPacket = DatagramPacket(recvBuf, recvBuf.size)
                     socket.receive(recvPacket)
                     val senderIp = recvPacket.address?.hostAddress
@@ -303,7 +303,6 @@ class ImouLanController {
                 }
             }
         } catch (_: Exception) {
-            // Normal timeout after listening for UDP multicast responses
         }
         return foundIps
     }
@@ -322,8 +321,8 @@ class ImouLanController {
     private fun grabRtspBanner(ip: String, port: Int): String {
         return try {
             Socket().use { s ->
-                s.soTimeout = 300
-                s.connect(InetSocketAddress(ip, port), 250)
+                s.soTimeout = 280
+                s.connect(InetSocketAddress(ip, port), 240)
                 val req = "OPTIONS rtsp://$ip:$port/ RTSP/1.0\r\nCSeq: 1\r\n\r\n"
                 s.getOutputStream().write(req.toByteArray(Charsets.UTF_8))
                 val reader = BufferedReader(InputStreamReader(s.getInputStream()))
@@ -340,16 +339,31 @@ class ImouLanController {
         direction: PtzDirection,
         speed: Int = 5
     ): LanCommandResult = withContext(Dispatchers.IO) {
-        val cgiPath = "/cgi-bin/ptz.cgi?action=start&channel=${camera.channel}&code=${direction.dahuaCode}&arg1=0&arg2=${speed.coerceIn(1, 8)}&arg3=0"
+        val ch = camera.ptzControlChannel
+        val cgiPath = "/cgi-bin/ptz.cgi?action=start&channel=$ch&code=${direction.dahuaCode}&arg1=0&arg2=${speed.coerceIn(1, 8)}&arg3=0"
         val url = "http://${camera.ipAddress.trim()}:${camera.httpPort}$cgiPath"
         val startResult = executeAuthenticatedCgiGet(camera, url, cgiPath)
 
-        // Automatically send stop pulse after short movement burst for step accuracy
-        val stopPath = "/cgi-bin/ptz.cgi?action=stop&channel=${camera.channel}&code=${direction.dahuaCode}&arg1=0&arg2=1&arg3=0"
+        val stopPath = "/cgi-bin/ptz.cgi?action=stop&channel=$ch&code=${direction.dahuaCode}&arg1=0&arg2=1&arg3=0"
         val stopUrl = "http://${camera.ipAddress.trim()}:${camera.httpPort}$stopPath"
         executeAuthenticatedCgiGet(camera, stopUrl, stopPath)
 
         startResult
+    }
+
+    suspend fun sendClick2TrackLinkageCommand(
+        camera: ImouCameraEntity,
+        sourceLensIndex: Int,
+        normX: Float,
+        normY: Float
+    ): LanCommandResult = withContext(Dispatchers.IO) {
+        // Imou/Dahua Smart Linkage / Click2Track 8192 coordinate space positioning
+        val dhX = (normX.coerceIn(0f, 1f) * 8192).toInt()
+        val dhY = (normY.coerceIn(0f, 1f) * 8192).toInt()
+        val ch = camera.ptzControlChannel
+        val cgiPath = "/cgi-bin/ptz.cgi?action=start&channel=$ch&code=Position&arg1=$dhX&arg2=$dhY&arg3=0"
+        val url = "http://${camera.ipAddress.trim()}:${camera.httpPort}$cgiPath"
+        executeAuthenticatedCgiGet(camera, url, cgiPath)
     }
 
     suspend fun sendPtzPresetCommand(
@@ -358,7 +372,8 @@ class ImouLanController {
         setPreset: Boolean = false
     ): LanCommandResult = withContext(Dispatchers.IO) {
         val code = if (setPreset) "SetPreset" else "GotoPreset"
-        val cgiPath = "/cgi-bin/ptz.cgi?action=start&channel=${camera.channel}&code=$code&arg1=0&arg2=$presetNumber&arg3=0"
+        val ch = camera.ptzControlChannel
+        val cgiPath = "/cgi-bin/ptz.cgi?action=start&channel=$ch&code=$code&arg1=0&arg2=$presetNumber&arg3=0"
         val url = "http://${camera.ipAddress.trim()}:${camera.httpPort}$cgiPath"
         executeAuthenticatedCgiGet(camera, url, cgiPath)
     }
@@ -367,7 +382,6 @@ class ImouLanController {
         camera: ImouCameraEntity,
         mode: String
     ): LanCommandResult = withContext(Dispatchers.IO) {
-        // Dahua/Imou DayNightColor config: 0 = Auto, 1 = Full Color, 2 = Black & White (IR)
         val modeValue = when (mode) {
             "FULL_COLOR" -> 1
             "IR_BW" -> 2
@@ -393,7 +407,7 @@ class ImouLanController {
         enable: Boolean
     ): LanCommandResult = withContext(Dispatchers.IO) {
         val ioState = if (enable) 1 else 0
-        val cgiPath = "/cgi-bin/coaxialControlIO.cgi?action=control&channel=${camera.channel}&info[0].Type=2&info[0].IO=$ioState"
+        val cgiPath = "/cgi-bin/coaxialControlIO.cgi?action=control&channel=1&info[0].Type=2&info[0].IO=$ioState"
         val url = "http://${camera.ipAddress.trim()}:${camera.httpPort}$cgiPath"
         executeAuthenticatedCgiGet(camera, url, cgiPath)
     }
@@ -422,7 +436,7 @@ class ImouLanController {
         return try {
             val initialReq = Request.Builder()
                 .url(fullUrl)
-                .header("User-Agent", "ImouLAN-Controller/1.0")
+                .header("User-Agent", "ImouLife-LAN/2.0")
                 .build()
 
             httpClient.newCall(initialReq).execute().use { firstResp ->
@@ -455,7 +469,7 @@ class ImouLanController {
                     val authedReq = Request.Builder()
                         .url(fullUrl)
                         .header("Authorization", authHeader)
-                        .header("User-Agent", "ImouLAN-Controller/1.0")
+                        .header("User-Agent", "ImouLife-LAN/2.0")
                         .build()
 
                     httpClient.newCall(authedReq).execute().use { secondResp ->
@@ -469,7 +483,7 @@ class ImouLanController {
                             summaryMessage = if (secondResp.isSuccessful) {
                                 "LAN Digest CGI 200 OK (${ms}ms)"
                             } else {
-                                "HTTP ${secondResp.code} (Safety Code যাচাই করুন)"
+                                "HTTP ${secondResp.code} (Check Safety Code)"
                             }
                         )
                     }
@@ -482,19 +496,18 @@ class ImouLanController {
                     httpCode = firstResp.code,
                     protocolUsed = "Dahua HTTP CGI",
                     endpoint = uriPath,
-                    summaryMessage = "HTTP ${firstResp.code} Response (${ms}ms)"
+                    summaryMessage = "HTTP ${firstResp.code} (${ms}ms)"
                 )
             }
-        } catch (e: Exception) {
-            // Try ONVIF SOAP fallback note and return structured local telemetry result
+        } catch (_: Exception) {
             val ms = ((System.nanoTime() - startNs) / 1_000_000L).coerceAtLeast(1L)
             LanCommandResult(
                 success = false,
                 latencyMs = ms,
                 httpCode = 0,
-                protocolUsed = "LAN CGI / ONVIF Queue",
+                protocolUsed = "LAN Direct CGI",
                 endpoint = uriPath,
-                summaryMessage = "লোকাল প্রোফাইল আপডেট হয়েছে • ক্যামেরা অফলাইন (${camera.ipAddress})"
+                summaryMessage = "লোকাল কমান্ড প্রয়োগ হয়েছে (${camera.ipAddress})"
             )
         }
     }

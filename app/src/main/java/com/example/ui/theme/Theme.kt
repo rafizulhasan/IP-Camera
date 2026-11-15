@@ -10,19 +10,19 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-private val PitchBlackColorScheme = darkColorScheme(
-    primary = CyberCyan,
+private val ImouPitchBlackColorScheme = darkColorScheme(
+    primary = ImouOrange,
     onPrimary = PitchBlack,
-    primaryContainer = CyberCyanContainer,
-    onPrimaryContainer = CyberCyan,
+    primaryContainer = ImouOrangeContainer,
+    onPrimaryContainer = ImouOrangeLight,
     secondary = LanEmerald,
     onSecondary = PitchBlack,
     secondaryContainer = LanEmeraldContainer,
     onSecondaryContainer = LanEmerald,
-    tertiary = WarningAmber,
+    tertiary = CyberCyan,
     onTertiary = PitchBlack,
-    tertiaryContainer = WarningAmberContainer,
-    onTertiaryContainer = WarningAmber,
+    tertiaryContainer = CyberCyanContainer,
+    onTertiaryContainer = CyberCyan,
     error = AlertCrimson,
     onError = Color.White,
     errorContainer = AlertCrimsonContainer,
@@ -61,7 +61,7 @@ fun MyApplicationTheme(
     }
 
     MaterialTheme(
-        colorScheme = PitchBlackColorScheme,
+        colorScheme = ImouPitchBlackColorScheme,
         typography = Typography,
         content = content
     )

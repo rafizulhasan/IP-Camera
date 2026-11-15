@@ -10,17 +10,26 @@ class ImouCameraRepository(private val dao: ImouCameraDao) {
     suspend fun ensureDefaultCamerasSeeded(detectedSubnetPrefix: String = "192.168.1") {
         if (dao.getCameraCount() > 0) return
 
+        // 1. 3-Lens Flagship Camera (2 Fixed Wide Lenses + 1 Motorized PTZ Lens)
         val c1Id = dao.insertCamera(
             ImouCameraEntity(
-                name = "মেইন গেট • Cruiser SE+",
-                modelName = "Imou Cruiser SE+ 4MP PTZ",
+                name = "মেইন গেট ও বাউন্ডারি",
+                modelName = "Imou Cruiser Triple 3-Lens (12MP)",
+                roomName = "সামনের গেট",
                 ipAddress = "$detectedSubnetPrefix.108",
                 rtspPort = 554,
                 httpPort = 80,
                 onvifPort = 80,
                 username = "admin",
                 safetyCode = "L28A9F4C",
-                channel = 1,
+                lensCount = 3,
+                lens1Channel = 1,
+                lens2Channel = 2,
+                lens3Channel = 3,
+                lens1Name = "লেন্স ১ • বাম প্যানোরামা (Fixed)",
+                lens2Name = "লেন্স ২ • ডান প্যানোরামা (Fixed)",
+                lens3Name = "লেন্স ৩ • 360° PTZ ট্র্যাকিং (Motor)",
+                ptzControlChannel = 3,
                 preferredSubtype = 0,
                 supportsPtz = true,
                 supportsAudio = true,
@@ -30,25 +39,71 @@ class ImouCameraRepository(private val dao: ImouCameraDao) {
                 motionAlertEnabled = true,
                 humanDetectEnabled = true,
                 smartTrackingEnabled = true,
-                zoneName = "প্রবেশদ্বার (Gate)",
-                panAngle = -18f,
-                tiltAngle = 12f,
+                click2TrackEnabled = true,
+                panAngle = -15f,
+                tiltAngle = 10f,
                 zoomLevel = 1.0f,
                 isFavorite = true
             )
         )
 
+        // 2. 2-Lens Dual Camera (Cruiser Dual 2 - Fixed Wide + PTZ Dome)
         val c2Id = dao.insertCamera(
             ImouCameraEntity(
-                name = "লিভিং রুম • Ranger 2",
-                modelName = "Imou Ranger 2 2K 360°",
+                name = "গ্যারেজ ও ড্রাইভওয়ে",
+                modelName = "Imou Cruiser Dual 2 (10MP)",
+                roomName = "আউটডোর",
                 ipAddress = "$detectedSubnetPrefix.109",
                 rtspPort = 554,
                 httpPort = 80,
                 onvifPort = 80,
                 username = "admin",
                 safetyCode = "K94D2E7B",
-                channel = 1,
+                lensCount = 2,
+                lens1Channel = 1,
+                lens2Channel = 2,
+                lens3Channel = 3,
+                lens1Name = "লেন্স ১ • ফিক্সড ওয়াইড ওভারভিউ",
+                lens2Name = "লেন্স ২ • 360° PTZ ডোম লেন্স",
+                lens3Name = "লেন্স ৩",
+                ptzControlChannel = 2,
+                preferredSubtype = 0,
+                supportsPtz = true,
+                supportsAudio = true,
+                supportsSpotlight = true,
+                supportsSiren = true,
+                nightVisionMode = "FULL_COLOR",
+                motionAlertEnabled = true,
+                humanDetectEnabled = true,
+                smartTrackingEnabled = true,
+                click2TrackEnabled = true,
+                panAngle = 22f,
+                tiltAngle = 8f,
+                zoomLevel = 1.2f,
+                isFavorite = true
+            )
+        )
+
+        // 3. 2-Lens Indoor Dual Camera (Ranger Dual 6MP)
+        val c3Id = dao.insertCamera(
+            ImouCameraEntity(
+                name = "লিভিং ও ডাইনিং রুম",
+                modelName = "Imou Ranger Dual (6MP)",
+                roomName = "রুম",
+                ipAddress = "$detectedSubnetPrefix.110",
+                rtspPort = 554,
+                httpPort = 80,
+                onvifPort = 80,
+                username = "admin",
+                safetyCode = "M71C5X8A",
+                lensCount = 2,
+                lens1Channel = 1,
+                lens2Channel = 2,
+                lens3Channel = 3,
+                lens1Name = "লেন্স ১ • ডাইনিং ফিক্সড ভিউ",
+                lens2Name = "লেন্স ২ • লিভিং রুম 360° PTZ",
+                lens3Name = "লেন্স ৩",
+                ptzControlChannel = 2,
                 preferredSubtype = 0,
                 supportsPtz = true,
                 supportsAudio = true,
@@ -58,90 +113,72 @@ class ImouCameraRepository(private val dao: ImouCameraDao) {
                 motionAlertEnabled = true,
                 humanDetectEnabled = true,
                 smartTrackingEnabled = true,
-                zoneName = "ইনডোর (Indoor)",
-                panAngle = 35f,
+                click2TrackEnabled = true,
+                panAngle = 0f,
                 tiltAngle = 5f,
-                zoomLevel = 1.2f,
+                zoomLevel = 1.0f,
                 isFavorite = true
             )
         )
 
-        val c3Id = dao.insertCamera(
-            ImouCameraEntity(
-                name = "ড্রাইভওয়ে • Bullet 2E",
-                modelName = "Imou Bullet 2E Full-Color",
-                ipAddress = "$detectedSubnetPrefix.110",
-                rtspPort = 554,
-                httpPort = 80,
-                onvifPort = 80,
-                username = "admin",
-                safetyCode = "M71C5X8A",
-                channel = 1,
-                preferredSubtype = 0,
-                supportsPtz = false,
-                supportsAudio = true,
-                supportsSpotlight = true,
-                supportsSiren = true,
-                nightVisionMode = "FULL_COLOR",
-                motionAlertEnabled = true,
-                humanDetectEnabled = true,
-                smartTrackingEnabled = false,
-                zoneName = "পার্কিং জোন (Parking)",
-                panAngle = 0f,
-                tiltAngle = 0f,
-                zoomLevel = 1.0f,
-                isFavorite = false
-            )
-        )
-
+        // 4. 1-Lens PTZ Camera (Rex 3D 5MP)
         val c4Id = dao.insertCamera(
             ImouCameraEntity(
-                name = "ছাদ ও করিডোর • Rex 3D",
-                modelName = "Imou Rex 3D 5MP Pan/Tilt",
+                name = "ছাদ ও সিঁড়ি ঘর",
+                modelName = "Imou Rex 3D (5MP PTZ)",
+                roomName = "ছাদ",
                 ipAddress = "$detectedSubnetPrefix.111",
                 rtspPort = 554,
                 httpPort = 80,
                 onvifPort = 80,
                 username = "admin",
                 safetyCode = "P63V8N2Q",
-                channel = 1,
-                preferredSubtype = 1,
+                lensCount = 1,
+                lens1Channel = 1,
+                lens2Channel = 2,
+                lens3Channel = 3,
+                lens1Name = "লেন্স ১ • 360° PTZ মেইন লেন্স",
+                lens2Name = "লেন্স ২",
+                lens3Name = "লেন্স ৩",
+                ptzControlChannel = 1,
+                preferredSubtype = 0,
                 supportsPtz = true,
                 supportsAudio = true,
                 supportsSpotlight = true,
                 supportsSiren = true,
-                nightVisionMode = "AUTO",
+                nightVisionMode = "SMART",
                 motionAlertEnabled = true,
-                humanDetectEnabled = false,
+                humanDetectEnabled = true,
                 smartTrackingEnabled = true,
-                zoneName = "পেরিমিটার (Rooftop)",
-                panAngle = -42f,
-                tiltAngle = 20f,
-                zoomLevel = 1.5f,
+                click2TrackEnabled = false,
+                panAngle = -30f,
+                tiltAngle = 15f,
+                zoomLevel = 1.0f,
                 isFavorite = false
             )
         )
 
-        // Seed default PTZ presets for the PTZ cameras
+        // Seed Favorite Collection Points (Presets) like Imou Life
         listOf(
-            PtzPresetEntity(cameraId = c1Id, presetNumber = 1, title = "পকেট গেট (Main Entry)", panAngle = -35f, tiltAngle = 10f, zoomLevel = 1.2f),
-            PtzPresetEntity(cameraId = c1Id, presetNumber = 2, title = "গাড়ি পার্কিং (Car Porch)", panAngle = 15f, tiltAngle = 18f, zoomLevel = 1.6f),
-            PtzPresetEntity(cameraId = c1Id, presetNumber = 3, title = "সামনের রাস্তা (Street View)", panAngle = 68f, tiltAngle = 4f, zoomLevel = 2.0f),
-            PtzPresetEntity(cameraId = c2Id, presetNumber = 1, title = "সোফা ও টিভি জোন", panAngle = 0f, tiltAngle = 5f, zoomLevel = 1.0f),
-            PtzPresetEntity(cameraId = c2Id, presetNumber = 2, title = "বারান্দার দরজা", panAngle = -85f, tiltAngle = 12f, zoomLevel = 1.4f),
-            PtzPresetEntity(cameraId = c4Id, presetNumber = 1, title = "সিঁড়ি ঘর (Staircase)", panAngle = -20f, tiltAngle = 15f, zoomLevel = 1.0f)
+            PtzPresetEntity(cameraId = c1Id, presetNumber = 1, title = "পকেট গেট (Main Entry)", panAngle = -42f, tiltAngle = 12f, zoomLevel = 1.4f),
+            PtzPresetEntity(cameraId = c1Id, presetNumber = 2, title = "সামনের রাস্তা (Roadside)", panAngle = 18f, tiltAngle = 6f, zoomLevel = 2.0f),
+            PtzPresetEntity(cameraId = c1Id, presetNumber = 3, title = "বাউন্ডারি ওয়াল (Corner)", panAngle = 72f, tiltAngle = 15f, zoomLevel = 1.6f),
+            PtzPresetEntity(cameraId = c2Id, presetNumber = 1, title = "গাড়ি পার্কিং (Car Porch)", panAngle = -15f, tiltAngle = 14f, zoomLevel = 1.2f),
+            PtzPresetEntity(cameraId = c2Id, presetNumber = 2, title = "সিঁড়ি এন্ট্রি (Stairway)", panAngle = 48f, tiltAngle = 10f, zoomLevel = 1.5f),
+            PtzPresetEntity(cameraId = c3Id, presetNumber = 1, title = "সোফা ও টিভি জোন", panAngle = 0f, tiltAngle = 5f, zoomLevel = 1.0f),
+            PtzPresetEntity(cameraId = c3Id, presetNumber = 2, title = "বারান্দার দরজা", panAngle = -65f, tiltAngle = 10f, zoomLevel = 1.4f),
+            PtzPresetEntity(cameraId = c4Id, presetNumber = 1, title = "চিলেকোঠা দরজা", panAngle = -20f, tiltAngle = 12f, zoomLevel = 1.0f)
         ).forEach { dao.insertPreset(it) }
 
-        // Seed initial LAN Event logs
         dao.insertVaultEvent(
             VaultEventEntity(
                 cameraId = c1Id,
-                cameraName = "মেইন গেট • Cruiser SE+",
+                cameraName = "মেইন গেট ও বাউন্ডারি",
                 cameraIp = "$detectedSubnetPrefix.108",
-                eventType = "CGI_COMMAND",
-                title = "অফলাইন LAN ম্যাট্রিক্স প্রোফাইল প্রস্তুত",
-                details = "RTSP Port 554 (TCP) এবং Dahua HTTP CGI / ONVIF লোকাল কন্ট্রোল সক্রিয়। রাউটারে ইন্টারনেট না থাকলেও লোকাল ওয়াইফাই দিয়ে সরাসরি স্ট্রিমিং ও PTZ কাজ করবে।",
-                resolution = "2560x1440 (2K HEVC)"
+                eventType = "CLICK2TRACK",
+                title = "মাল্টি-লেন্স (3-Lens / 2-Lens) LAN সিস্টেম প্রস্তুত",
+                details = "চ্যানেল ১, ২ ও ৩ একসাথে প্লেব্যাক এবং ফিক্সড লেন্সে ট্যাপ করে PTZ লেন্স ঘোরানোর Click2Track ফিচার সক্রিয় করা হয়েছে।",
+                resolution = "3-Lens Simultaneous RTSP"
             )
         )
     }

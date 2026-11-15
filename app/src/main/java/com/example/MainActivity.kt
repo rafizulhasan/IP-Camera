@@ -15,16 +15,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ControlCamera
-import androidx.compose.material.icons.filled.FolderSpecial
-import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Radar
-import androidx.compose.material.icons.outlined.ControlCamera
-import androidx.compose.material.icons.outlined.FolderSpecial
-import androidx.compose.material.icons.outlined.GridView
-import androidx.compose.material.icons.outlined.HelpOutline
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Radar
+import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -53,16 +51,15 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.local.ImouCameraEntity
 import com.example.ui.ImouLanViewModel
 import com.example.ui.MainNavTab
-import com.example.ui.components.CameraEditorDialog
+import com.example.ui.components.ImouCameraEditorDialog
 import com.example.ui.components.SavePtzPresetDialog
-import com.example.ui.screens.DedicatedPtzScreen
-import com.example.ui.screens.LanScannerScreen
-import com.example.ui.screens.LiveMatrixScreen
-import com.example.ui.screens.OfflineLanGuideScreen
-import com.example.ui.screens.VaultAndLogsScreen
+import com.example.ui.screens.ImouHomeScreen
+import com.example.ui.screens.ImouLanCenterScreen
+import com.example.ui.screens.ImouMessagesAndAlbumScreen
+import com.example.ui.screens.ImouMultiLensLiveScreen
 import com.example.ui.theme.CarbonCard
-import com.example.ui.theme.CyberCyan
-import com.example.ui.theme.CyberCyanContainer
+import com.example.ui.theme.ImouOrange
+import com.example.ui.theme.ImouOrangeContainer
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.ObsidianSurface
 import com.example.ui.theme.PitchBlack
@@ -75,14 +72,14 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
-                ImouLanApp()
+                ImouSmartLifeLanApp()
             }
         }
     }
 }
 
 @Composable
-fun ImouLanApp(
+fun ImouSmartLifeLanApp(
     viewModel: ImouLanViewModel = viewModel()
 ) {
     val cameras by viewModel.cameras.collectAsStateWithLifecycle()
@@ -106,6 +103,11 @@ fun ImouLanApp(
         else allPresets.filter { it.cameraId == selectedCamera.id }
     }
 
+    val eventsForSelected = remember(vaultEvents, selectedCamera) {
+        if (selectedCamera == null) emptyList()
+        else vaultEvents.filter { it.cameraId == selectedCamera.id }
+    }
+
     LaunchedEffect(hudState.snackbarMessage) {
         val msg = hudState.snackbarMessage
         if (!msg.isNullOrBlank()) {
@@ -114,19 +116,18 @@ fun ImouLanApp(
         }
     }
 
-    // BackHandler on secondary tabs returns to LIVE_MATRIX
-    if (hudState.activeTab != MainNavTab.LIVE_MATRIX) {
+    // BackHandler on secondary tabs returns to IMOU_HOME
+    if (hudState.activeTab != MainNavTab.IMOU_HOME) {
         BackHandler {
-            viewModel.selectTab(MainNavTab.LIVE_MATRIX)
+            viewModel.selectTab(MainNavTab.IMOU_HOME)
         }
     }
 
     val navItems = listOf(
-        Triple(MainNavTab.LIVE_MATRIX, stringResource(R.string.nav_monitor), Icons.Filled.GridView to Icons.Outlined.GridView),
-        Triple(MainNavTab.PTZ_CONSOLE, stringResource(R.string.nav_ptz), Icons.Filled.ControlCamera to Icons.Outlined.ControlCamera),
-        Triple(MainNavTab.LAN_SCANNER, stringResource(R.string.nav_scanner), Icons.Filled.Radar to Icons.Outlined.Radar),
-        Triple(MainNavTab.LOCAL_VAULT, stringResource(R.string.nav_vault), Icons.Filled.FolderSpecial to Icons.Outlined.FolderSpecial),
-        Triple(MainNavTab.OFFLINE_GUIDE, stringResource(R.string.nav_guide), Icons.Filled.HelpOutline to Icons.Outlined.HelpOutline)
+        Triple(MainNavTab.IMOU_HOME, stringResource(R.string.nav_home), Icons.Filled.Home to Icons.Outlined.Home),
+        Triple(MainNavTab.MULTI_LENS_LIVE, stringResource(R.string.nav_live), Icons.Filled.Videocam to Icons.Outlined.Videocam),
+        Triple(MainNavTab.MESSAGES_ALBUM, stringResource(R.string.nav_messages), Icons.Filled.Notifications to Icons.Outlined.Notifications),
+        Triple(MainNavTab.LAN_SETTINGS, stringResource(R.string.nav_lan_hub), Icons.Filled.Radar to Icons.Outlined.Radar)
     )
 
     BoxWithConstraints(
@@ -146,7 +147,7 @@ fun ImouLanApp(
                         snackbarData = data,
                         containerColor = CarbonCard,
                         contentColor = TextPureWhite,
-                        actionColor = CyberCyan
+                        actionColor = ImouOrange
                     )
                 }
             },
@@ -174,9 +175,9 @@ fun ImouLanApp(
                                     )
                                 },
                                 colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = CyberCyan,
-                                    selectedTextColor = CyberCyan,
-                                    indicatorColor = CyberCyanContainer,
+                                    selectedIconColor = ImouOrange,
+                                    selectedTextColor = ImouOrange,
+                                    indicatorColor = ImouOrangeContainer,
                                     unselectedIconColor = TextSecondary,
                                     unselectedTextColor = TextSecondary
                                 ),
@@ -212,9 +213,9 @@ fun ImouLanApp(
                                 },
                                 label = { Text(label, style = MaterialTheme.typography.labelSmall) },
                                 colors = NavigationRailItemDefaults.colors(
-                                    selectedIconColor = CyberCyan,
-                                    selectedTextColor = CyberCyan,
-                                    indicatorColor = CyberCyanContainer,
+                                    selectedIconColor = ImouOrange,
+                                    selectedTextColor = ImouOrange,
+                                    indicatorColor = ImouOrangeContainer,
                                     unselectedIconColor = TextSecondary,
                                     unselectedTextColor = TextSecondary
                                 ),
@@ -226,14 +227,12 @@ fun ImouLanApp(
 
                 Box(modifier = Modifier.weight(1f)) {
                     when (hudState.activeTab) {
-                        MainNavTab.LIVE_MATRIX -> {
-                            LiveMatrixScreen(
+                        MainNavTab.IMOU_HOME -> {
+                            ImouHomeScreen(
                                 cameras = cameras,
-                                selectedCamera = selectedCamera,
-                                presetsForSelected = presetsForSelected,
-                                hudState = hudState,
-                                onSelectCamera = { viewModel.selectCamera(it) },
-                                onToggleLayoutMode = { viewModel.toggleMatrixLayoutMode() },
+                                networkInfo = hudState.networkInfo,
+                                probeResults = hudState.probeResults,
+                                onOpenCameraLiveView = { camId -> viewModel.openCameraLiveView(camId) },
                                 onAddCameraClick = {
                                     editingCamera = null
                                     prefillIpForEditor = null
@@ -244,60 +243,67 @@ fun ImouLanApp(
                                     prefillIpForEditor = null
                                     showCameraEditor = true
                                 },
-                                onToggleStreamQuality = { viewModel.toggleStreamQuality(it) },
-                                onToggleAudio = { viewModel.toggleAudioMute(it) },
-                                onCaptureSnapshot = { viewModel.captureSnapshotToVault(it) },
-                                onToggleRecording = { viewModel.toggleRecording(it) },
-                                onProbeCamera = { viewModel.probeSingleCamera(it) },
-                                onPinchZoom = { cam, z -> viewModel.setCameraZoom(cam, z) },
-                                onPtzDirection = { cam, dir -> viewModel.movePtz(cam, dir) },
-                                onCenterPtz = { viewModel.centerCameraPtz(it) },
-                                onSpeedChange = { viewModel.setPtzSpeed(it) },
-                                onSelectPreset = { cam, preset -> viewModel.applyPtzPreset(cam, preset) },
-                                onAddPresetRequest = { cam -> presetSaveCamera = cam },
-                                onDeletePreset = { viewModel.deletePreset(it) },
-                                onNightVisionChange = { cam, mode -> viewModel.updateNightVisionMode(cam, mode) },
-                                onToggleSpotlight = { viewModel.toggleSpotlight(it) },
-                                onToggleSiren = { viewModel.toggleSiren(it) },
-                                onToggleAllSirens = { viewModel.toggleAllCamerasSiren() },
-                                onTogglePrivacyMask = { viewModel.togglePrivacyMask(it) },
-                                onToggleFlip180 = { viewModel.toggleFlip180(it) },
-                                onToggleSmartTracking = { viewModel.toggleSmartTracking(it) },
-                                onRebootCamera = { viewModel.rebootCameraOverLan(it) }
+                                onOpenLanScannerClick = { viewModel.selectTab(MainNavTab.LAN_SETTINGS) },
+                                onToggleCameraSiren = { viewModel.toggleSiren(it) },
+                                onToggleCameraSpotlight = { viewModel.toggleSpotlight(it) },
+                                onToggleCameraPrivacy = { viewModel.togglePrivacyMask(it) },
+                                onToggleAllSirens = { viewModel.toggleAllCamerasSiren() }
                             )
                         }
 
-                        MainNavTab.PTZ_CONSOLE -> {
-                            DedicatedPtzScreen(
+                        MainNavTab.MULTI_LENS_LIVE -> {
+                            ImouMultiLensLiveScreen(
                                 cameras = cameras,
                                 selectedCamera = selectedCamera,
                                 presetsForSelected = presetsForSelected,
+                                eventsForSelected = eventsForSelected,
                                 hudState = hudState,
+                                onBackToHome = { viewModel.selectTab(MainNavTab.IMOU_HOME) },
                                 onSelectCamera = { viewModel.selectCamera(it) },
-                                onToggleStreamQuality = { viewModel.toggleStreamQuality(it) },
-                                onToggleAudio = { viewModel.toggleAudioMute(it) },
+                                onEditCameraSettings = { cam ->
+                                    editingCamera = cam
+                                    prefillIpForEditor = null
+                                    showCameraEditor = true
+                                },
+                                onProbeCamera = { viewModel.probeSingleCamera(it) },
+                                onClick2TrackTap = { cam, lensIdx, nx, ny ->
+                                    viewModel.performClick2Track(cam, lensIdx, nx, ny)
+                                },
                                 onCaptureSnapshot = { viewModel.captureSnapshotToVault(it) },
                                 onToggleRecording = { viewModel.toggleRecording(it) },
-                                onProbeCamera = { viewModel.probeSingleCamera(it) },
-                                onPinchZoom = { cam, z -> viewModel.setCameraZoom(cam, z) },
+                                onToggleAudio = { viewModel.toggleAudioMute(it) },
+                                onToggleTalk = { viewModel.toggleTwoWayTalk(it) },
+                                onToggleStreamQuality = { viewModel.toggleStreamQuality(it) },
+                                onToggleSpotlight = { viewModel.toggleSpotlight(it) },
+                                onToggleSiren = { viewModel.toggleSiren(it) },
                                 onPtzDirection = { cam, dir -> viewModel.movePtz(cam, dir) },
                                 onCenterPtz = { viewModel.centerCameraPtz(it) },
                                 onSpeedChange = { viewModel.setPtzSpeed(it) },
+                                onZoomChange = { cam, z -> viewModel.setCameraZoom(cam, z) },
                                 onSelectPreset = { cam, preset -> viewModel.applyPtzPreset(cam, preset) },
                                 onAddPresetRequest = { cam -> presetSaveCamera = cam },
                                 onDeletePreset = { viewModel.deletePreset(it) },
                                 onNightVisionChange = { cam, mode -> viewModel.updateNightVisionMode(cam, mode) },
-                                onToggleSpotlight = { viewModel.toggleSpotlight(it) },
-                                onToggleSiren = { viewModel.toggleSiren(it) },
+                                onToggleHumanDetect = { viewModel.toggleHumanDetect(it) },
+                                onToggleSmartTracking = { viewModel.toggleSmartTracking(it) },
+                                onToggleClick2Track = { viewModel.toggleClick2Track(it) },
+                                onToggleAutoCruise = { viewModel.toggleAutoCruise(it) },
                                 onTogglePrivacyMask = { viewModel.togglePrivacyMask(it) },
                                 onToggleFlip180 = { viewModel.toggleFlip180(it) },
-                                onToggleSmartTracking = { viewModel.toggleSmartTracking(it) },
                                 onRebootCamera = { viewModel.rebootCameraOverLan(it) }
                             )
                         }
 
-                        MainNavTab.LAN_SCANNER -> {
-                            LanScannerScreen(
+                        MainNavTab.MESSAGES_ALBUM -> {
+                            ImouMessagesAndAlbumScreen(
+                                events = vaultEvents,
+                                onDeleteEvent = { viewModel.deleteVaultEvent(it) },
+                                onClearAllEvents = { viewModel.clearAllVaultEvents() }
+                            )
+                        }
+
+                        MainNavTab.LAN_SETTINGS -> {
+                            ImouLanCenterScreen(
                                 networkInfo = hudState.networkInfo,
                                 isScanning = hudState.isScanningSubnet,
                                 scanProgress = hudState.scanProgressPercent,
@@ -315,18 +321,6 @@ fun ImouLanApp(
                                 }
                             )
                         }
-
-                        MainNavTab.LOCAL_VAULT -> {
-                            VaultAndLogsScreen(
-                                events = vaultEvents,
-                                onDeleteEvent = { viewModel.deleteVaultEvent(it) },
-                                onClearAllEvents = { viewModel.clearAllVaultEvents() }
-                            )
-                        }
-
-                        MainNavTab.OFFLINE_GUIDE -> {
-                            OfflineLanGuideScreen(cameras = cameras)
-                        }
                     }
                 }
             }
@@ -334,7 +328,7 @@ fun ImouLanApp(
     }
 
     if (showCameraEditor) {
-        CameraEditorDialog(
+        ImouCameraEditorDialog(
             initialCamera = editingCamera,
             defaultSubnetPrefix = hudState.networkInfo.subnetPrefix,
             prefillIp = prefillIpForEditor,

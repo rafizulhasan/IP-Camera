@@ -11,7 +11,7 @@ import androidx.room.RoomDatabase
         PtzPresetEntity::class,
         VaultEventEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class ImouLanDatabase : RoomDatabase() {
@@ -26,7 +26,7 @@ abstract class ImouLanDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     ImouLanDatabase::class.java,
-                    "imou_lan_pitch_black.db"
+                    "imou_smartlife_lan_v2.db"
                 )
                     .fallbackToDestructiveMigration(dropAllTables = true)
                     .build()

@@ -1,13 +1,7 @@
 <resources>
     <string name="app_name">Imou LAN</string>
-    <string name="nav_monitor">লাইভ মনিটর</string>
-    <string name="nav_ptz">PTZ কন্ট্রোল</string>
-    <string name="nav_scanner">LAN স্ক্যানার</string>
-    <string name="nav_vault">ভল্ট ও লগ</string>
-    <string name="nav_guide">সেটআপ গাইড</string>
-    <string name="add_camera">নতুন ক্যামেরা যুক্ত করুন</string>
-    <string name="scan_lan">রাউটার LAN স্ক্যান করুন</string>
-    <string name="offline_lan_badge">OFF-GRID LAN • ইন্টারনেট ছাড়া সচল</string>
-    <string name="ptz_joystick_desc">8-Way PTZ Joystick</string>
-    <string name="snapshot_captured">স্ন্যাপশট সংরক্ষিত হয়েছে</string>
+    <string name="nav_home">হোম</string>
+    <string name="nav_live">মাল্টি-লেন্স লাইভ</string>
+    <string name="nav_messages">মেসেজ ও অ্যালবাম</string>
+    <string name="nav_lan_hub">LAN ও সেটআপ</string>
 </resources>

@@ -22,33 +22,27 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-enum class MatrixLayoutMode {
-    SINGLE_FOCUS,
-    QUAD_2X2
-}
-
 enum class MainNavTab {
-    LIVE_MATRIX,
-    PTZ_CONSOLE,
-    LAN_SCANNER,
-    LOCAL_VAULT,
-    OFFLINE_GUIDE
+    IMOU_HOME,
+    MULTI_LENS_LIVE,
+    MESSAGES_ALBUM,
+    LAN_SETTINGS
 }
 
 data class ImouHudUiState(
-    val activeTab: MainNavTab = MainNavTab.LIVE_MATRIX,
-    val layoutMode: MatrixLayoutMode = MatrixLayoutMode.QUAD_2X2,
+    val activeTab: MainNavTab = MainNavTab.IMOU_HOME,
     val selectedCameraId: Long = 0L,
     val ptzSpeed: Int = 5,
     val recordingCameraIds: Set<Long> = emptySet(),
     val mutedCameraIds: Set<Long> = emptySet(),
+    val activeTalkCameraIds: Set<Long> = emptySet(),
     val networkInfo: LocalNetworkInfo = LocalNetworkInfo("192.168.1.50", "192.168.1", "wlan0", true),
     val probeResults: Map<Long, RtspProbeResult> = emptyMap(),
     val isScanningSubnet: Boolean = false,
     val scanProgressPercent: Int = 0,
     val currentScanIp: String = "",
     val discoveredDevices: List<DiscoveredLanDevice> = emptyList(),
-    val lastCommandFeedback: String = "Dahua CGI / ONVIF • লোকাল LAN কন্ট্রোল প্রস্তুত",
+    val lastCommandFeedback: String = "Multi-Lens RTSP + Click2Track LAN সচল",
     val snackbarMessage: String? = null
 )
 
@@ -79,10 +73,7 @@ class ImouLanViewModel(application: Application) : AndroidViewModel(application)
             val initialList = repository.allCameras.first()
             if (initialList.isNotEmpty() && _hudState.value.selectedCameraId == 0L) {
                 _hudState.update {
-                    it.copy(
-                        selectedCameraId = initialList.first().id,
-                        mutedCameraIds = initialList.drop(1).map { c -> c.id }.toSet()
-                    )
+                    it.copy(selectedCameraId = initialList.first().id)
                 }
             }
             probeAllCamerasOnLan()
@@ -93,19 +84,13 @@ class ImouLanViewModel(application: Application) : AndroidViewModel(application)
         _hudState.update { it.copy(activeTab = tab) }
     }
 
-    fun toggleMatrixLayoutMode() {
-        _hudState.update { state ->
-            val next = if (state.layoutMode == MatrixLayoutMode.QUAD_2X2) {
-                MatrixLayoutMode.SINGLE_FOCUS
-            } else {
-                MatrixLayoutMode.QUAD_2X2
-            }
-            state.copy(layoutMode = next)
+    fun openCameraLiveView(cameraId: Long) {
+        _hudState.update {
+            it.copy(
+                selectedCameraId = cameraId,
+                activeTab = MainNavTab.MULTI_LENS_LIVE
+            )
         }
-    }
-
-    fun setMatrixLayoutMode(mode: MatrixLayoutMode) {
-        _hudState.update { it.copy(layoutMode = mode) }
     }
 
     fun selectCamera(cameraId: Long) {
@@ -124,8 +109,7 @@ class ImouLanViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             val net = lanController.detectLocalNetwork()
             _hudState.update { it.copy(networkInfo = net) }
-            val currentCameras = cameras.value
-            currentCameras.forEach { cam ->
+            cameras.value.forEach { cam ->
                 launch {
                     val result = lanController.verifyCameraRtspHandshake(cam)
                     _hudState.update { st ->
@@ -176,9 +160,9 @@ class ImouLanViewModel(application: Application) : AndroidViewModel(application)
                     scanProgressPercent = 100,
                     discoveredDevices = found,
                     snackbarMessage = if (found.isNotEmpty()) {
-                        "LAN স্ক্যান সম্পন্ন: ${found.size}টি IP ক্যামেরা/ডিভাইস পাওয়া গেছে!"
+                        "LAN স্ক্যান সম্পন্ন: ${found.size}টি Imou/ONVIF ডিভাইস পাওয়া গেছে!"
                     } else {
-                        "সাবনেট $cleanPrefix.x স্ক্যান সম্পন্ন (পোর্ট 554/80/37777 চেক করা হয়েছে)"
+                        "সাবনেট $cleanPrefix.x স্ক্যান সম্পন্ন"
                     }
                 )
             }
@@ -195,11 +179,10 @@ class ImouLanViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             cameras.value.forEachIndexed { idx, cam ->
                 val lastOctet = cam.ipAddress.substringAfterLast(".").toIntOrNull() ?: (108 + idx)
-                val updated = cam.copy(ipAddress = "$cleanPrefix.$lastOctet")
-                repository.updateCamera(updated)
+                repository.updateCamera(cam.copy(ipAddress = "$cleanPrefix.$lastOctet"))
             }
             _hudState.update {
-                it.copy(snackbarMessage = "সব ক্যামেরা $cleanPrefix.x সাবনেটে আপডেট করা হয়েছে")
+                it.copy(snackbarMessage = "সব ক্যামেরা $cleanPrefix.x সাবনেটে সিঙ্ক করা হয়েছে")
             }
             probeAllCamerasOnLan()
         }
@@ -212,7 +195,7 @@ class ImouLanViewModel(application: Application) : AndroidViewModel(application)
             _hudState.update {
                 it.copy(
                     selectedCameraId = targetId,
-                    snackbarMessage = "'${camera.name}' (${camera.ipAddress}) সংরক্ষিত হয়েছে"
+                    snackbarMessage = "'${camera.name}' (${camera.lensCount}-Lens) সংরক্ষিত হয়েছে"
                 )
             }
             probeSingleCamera(camera.copy(id = targetId))
@@ -232,6 +215,42 @@ class ImouLanViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    // Official Imou Life Click2Track (Smart Linkage between Fixed Lens and PTZ Lens)
+    fun performClick2Track(camera: ImouCameraEntity, sourceLensIndex: Int, normX: Float, normY: Float) {
+        val mappedPan = ((normX - 0.5f) * 240f + if (camera.lensCount == 3 && sourceLensIndex == 1) -40f else if (camera.lensCount == 3 && sourceLensIndex == 2) 40f else 0f)
+            .coerceIn(-175f, 175f)
+        val mappedTilt = ((0.5f - normY) * 90f).coerceIn(-25f, 80f)
+
+        viewModelScope.launch {
+            val updated = camera.copy(
+                linkageTargetX = normX,
+                linkageTargetY = normY,
+                panAngle = mappedPan,
+                tiltAngle = mappedTilt
+            )
+            repository.updateCamera(updated)
+
+            val res = lanController.sendClick2TrackLinkageCommand(updated, sourceLensIndex, normX, normY)
+            repository.logEvent(
+                VaultEventEntity(
+                    cameraId = camera.id,
+                    cameraName = camera.name,
+                    cameraIp = camera.ipAddress,
+                    eventType = "CLICK2TRACK",
+                    title = "Click2Track: লেন্স $sourceLensIndex -> PTZ লেন্স ট্র্যাকিং",
+                    details = "PTZ লেন্স স্বয়ংক্রিয়ভাবে PAN ${mappedPan.toInt()}° • TILT ${mappedTilt.toInt()}°-এ ফোকাস করেছে (${res.summaryMessage})",
+                    resolution = "${camera.lensCount}-Lens Linkage"
+                )
+            )
+            _hudState.update {
+                it.copy(
+                    lastCommandFeedback = "Click2Track (L$sourceLensIndex -> PTZ CH${camera.ptzControlChannel}): PAN ${mappedPan.toInt()}° TILT ${mappedTilt.toInt()}°",
+                    snackbarMessage = "Click2Track: ফিক্সড লেন্স $sourceLensIndex-এর পজিশনে PTZ লেন্স ফোকাস করেছে"
+                )
+            }
+        }
+    }
+
     fun movePtz(camera: ImouCameraEntity, direction: PtzDirection) {
         val speed = _hudState.value.ptzSpeed
         val scale = speed / 5f
@@ -239,14 +258,24 @@ class ImouLanViewModel(application: Application) : AndroidViewModel(application)
         val newTilt = (camera.tiltAngle + direction.tiltDelta * scale).coerceIn(-30f, 90f)
         val newZoom = (camera.zoomLevel + direction.zoomDelta).coerceIn(1.0f, 8.0f)
 
+        // Also update the Click2Track linkage box position on the fixed lens to stay in sync
+        val nextLinkX = (0.5f + (newPan / 240f)).coerceIn(0.1f, 0.9f)
+        val nextLinkY = (0.5f - (newTilt / 100f)).coerceIn(0.15f, 0.85f)
+
         viewModelScope.launch {
-            val updated = camera.copy(panAngle = newPan, tiltAngle = newTilt, zoomLevel = newZoom)
+            val updated = camera.copy(
+                panAngle = newPan,
+                tiltAngle = newTilt,
+                zoomLevel = newZoom,
+                linkageTargetX = nextLinkX,
+                linkageTargetY = nextLinkY
+            )
             repository.updateCamera(updated)
 
             val res = lanController.sendPtzMoveCommand(updated, direction, speed)
             _hudState.update {
                 it.copy(
-                    lastCommandFeedback = "${direction.labelBn} -> ${res.endpoint} (${res.summaryMessage})"
+                    lastCommandFeedback = "${direction.labelBn} (CH${camera.ptzControlChannel}) • ${res.summaryMessage}"
                 )
             }
         }
@@ -254,13 +283,19 @@ class ImouLanViewModel(application: Application) : AndroidViewModel(application)
 
     fun centerCameraPtz(camera: ImouCameraEntity) {
         viewModelScope.launch {
-            val updated = camera.copy(panAngle = 0f, tiltAngle = 0f, zoomLevel = 1.0f)
+            val updated = camera.copy(
+                panAngle = 0f,
+                tiltAngle = 0f,
+                zoomLevel = 1.0f,
+                linkageTargetX = 0.5f,
+                linkageTargetY = 0.5f
+            )
             repository.updateCamera(updated)
             val res = lanController.sendPtzPresetCommand(updated, presetNumber = 1, setPreset = false)
             _hudState.update {
                 it.copy(
-                    lastCommandFeedback = "PTZ হোম পজিশন (0°, 0°) • ${res.summaryMessage}",
-                    snackbarMessage = "${camera.name} সেন্টার পজিশনে রিসেট হয়েছে"
+                    lastCommandFeedback = "PTZ সেন্টার রিসেট (0°, 0°) • ${res.summaryMessage}",
+                    snackbarMessage = "${camera.name} PTZ লেন্স সেন্টারে রিসেট হয়েছে"
                 )
             }
         }
@@ -274,17 +309,21 @@ class ImouLanViewModel(application: Application) : AndroidViewModel(application)
             repository.updateCamera(updated)
             val res = lanController.sendPtzMoveCommand(updated, direction, _hudState.value.ptzSpeed)
             _hudState.update {
-                it.copy(lastCommandFeedback = "অপটিক্যাল জুম ${"%.1f".format(clamped)}x • ${res.summaryMessage}")
+                it.copy(lastCommandFeedback = "PTZ লেন্স জুম ${"%.1f".format(clamped)}x • ${res.summaryMessage}")
             }
         }
     }
 
     fun applyPtzPreset(camera: ImouCameraEntity, preset: PtzPresetEntity) {
         viewModelScope.launch {
+            val nextLinkX = (0.5f + (preset.panAngle / 240f)).coerceIn(0.1f, 0.9f)
+            val nextLinkY = (0.5f - (preset.tiltAngle / 100f)).coerceIn(0.15f, 0.85f)
             val updated = camera.copy(
                 panAngle = preset.panAngle,
                 tiltAngle = preset.tiltAngle,
-                zoomLevel = preset.zoomLevel
+                zoomLevel = preset.zoomLevel,
+                linkageTargetX = nextLinkX,
+                linkageTargetY = nextLinkY
             )
             repository.updateCamera(updated)
             val res = lanController.sendPtzPresetCommand(updated, preset.presetNumber, setPreset = false)
@@ -294,14 +333,14 @@ class ImouLanViewModel(application: Application) : AndroidViewModel(application)
                     cameraName = camera.name,
                     cameraIp = camera.ipAddress,
                     eventType = "PTZ_PRESET",
-                    title = "PTZ প্রিসেট #${preset.presetNumber} (${preset.title})",
+                    title = "ফেভারিট পয়েন্ট: ${preset.title}",
                     details = "PAN ${preset.panAngle.toInt()}° • TILT ${preset.tiltAngle.toInt()}° • ZOOM ${preset.zoomLevel}x (${res.summaryMessage})"
                 )
             )
             _hudState.update {
                 it.copy(
-                    lastCommandFeedback = "GotoPreset #${preset.presetNumber} '${preset.title}' • ${res.summaryMessage}",
-                    snackbarMessage = "ক্যামেরা '${preset.title}' অ্যাঙ্গেলে ঘোরানো হয়েছে"
+                    lastCommandFeedback = "GotoPreset #${preset.presetNumber} '${preset.title}'",
+                    snackbarMessage = "PTZ লেন্স '${preset.title}' পয়েন্টে ঘোরানো হয়েছে"
                 )
             }
         }
@@ -319,12 +358,9 @@ class ImouLanViewModel(application: Application) : AndroidViewModel(application)
                     zoomLevel = camera.zoomLevel
                 )
             )
-            val res = lanController.sendPtzPresetCommand(camera, presetNumber, setPreset = true)
+            lanController.sendPtzPresetCommand(camera, presetNumber, setPreset = true)
             _hudState.update {
-                it.copy(
-                    lastCommandFeedback = "SetPreset #$presetNumber ($title) • ${res.summaryMessage}",
-                    snackbarMessage = "প্রিসেট '$title' মেমোরিতে সংরক্ষিত হয়েছে"
-                )
+                it.copy(snackbarMessage = "কালেকশন পয়েন্ট '$title' সেভ করা হয়েছে")
             }
         }
     }
@@ -338,13 +374,12 @@ class ImouLanViewModel(application: Application) : AndroidViewModel(application)
     fun toggleStreamQuality(camera: ImouCameraEntity) {
         viewModelScope.launch {
             val nextSub = if (camera.preferredSubtype == 0) 1 else 0
-            val updated = camera.copy(preferredSubtype = nextSub)
-            repository.updateCamera(updated)
-            val label = if (nextSub == 0) "Main Stream (2K HD • subtype=0)" else "Sub Stream (SD Fast • subtype=1)"
+            repository.updateCamera(camera.copy(preferredSubtype = nextSub))
+            val label = if (nextSub == 0) "2K/HD মেইন স্ট্রিম (subtype=0)" else "SD ফাস্ট সাব স্ট্রিম (subtype=1)"
             _hudState.update {
                 it.copy(
-                    lastCommandFeedback = "RTSP স্ট্রিম সুইচ: $label",
-                    snackbarMessage = "${camera.name}: $label সক্রিয়"
+                    lastCommandFeedback = "সব ${camera.lensCount}টি লেন্সে $label সক্রিয়",
+                    snackbarMessage = "${camera.name}: সব লেন্সে $label চালু হয়েছে"
                 )
             }
         }
@@ -352,33 +387,39 @@ class ImouLanViewModel(application: Application) : AndroidViewModel(application)
 
     fun toggleAudioMute(cameraId: Long) {
         _hudState.update { state ->
-            val nextSet = if (state.mutedCameraIds.contains(cameraId)) {
-                state.mutedCameraIds - cameraId
-            } else {
-                state.mutedCameraIds + cameraId
-            }
-            state.copy(mutedCameraIds = nextSet)
+            val next = if (state.mutedCameraIds.contains(cameraId)) state.mutedCameraIds - cameraId else state.mutedCameraIds + cameraId
+            state.copy(mutedCameraIds = next)
+        }
+    }
+
+    fun toggleTwoWayTalk(cameraId: Long) {
+        _hudState.update { state ->
+            val isNowActive = !state.activeTalkCameraIds.contains(cameraId)
+            val next = if (isNowActive) state.activeTalkCameraIds + cameraId else state.activeTalkCameraIds - cameraId
+            state.copy(
+                activeTalkCameraIds = next,
+                snackbarMessage = if (isNowActive) "টু-ওয়ে মাইক টক (LAN Audio) চালু হয়েছে" else "টু-ওয়ে মাইক টক বন্ধ করা হয়েছে"
+            )
         }
     }
 
     fun captureSnapshotToVault(camera: ImouCameraEntity) {
         viewModelScope.launch {
-            val resLabel = if (camera.preferredSubtype == 0) "2560x1440 (2K HEVC)" else "640x480 (SD H.264)"
             repository.logEvent(
                 VaultEventEntity(
                     cameraId = camera.id,
                     cameraName = camera.name,
                     cameraIp = camera.ipAddress,
                     eventType = "SNAPSHOT",
-                    title = "হাই-রেজোলিউশন LAN স্ন্যাপশট ক্যাপচার",
-                    details = "Endpoint: ${camera.buildSnapshotCgiUrl()} • Angle: P:${camera.panAngle.toInt()}° T:${camera.tiltAngle.toInt()}° • NV: ${camera.nightVisionMode}",
-                    resolution = resLabel
+                    title = "${camera.lensCount}-Lens একসাথে স্ন্যাপশট ক্যাপচার",
+                    details = "CGI: ${camera.buildSnapshotCgiUrl()} • PAN ${camera.panAngle.toInt()}° TILT ${camera.tiltAngle.toInt()}°",
+                    resolution = "${camera.lensCount}x 2K HEVC"
                 )
             )
             _hudState.update {
                 it.copy(
-                    lastCommandFeedback = "Snapshot captured -> /cgi-bin/snapshot.cgi?channel=${camera.channel}",
-                    snackbarMessage = "স্ন্যাপশট ভল্টে সংরক্ষিত হয়েছে (${camera.name})"
+                    lastCommandFeedback = "Multi-Lens Snapshot saved -> Album",
+                    snackbarMessage = "${camera.name}-এর সব লেন্সের স্ন্যাপশট অ্যালবামে সেভ হয়েছে"
                 )
             }
         }
@@ -391,9 +432,9 @@ class ImouLanViewModel(application: Application) : AndroidViewModel(application)
             st.copy(
                 recordingCameraIds = next,
                 snackbarMessage = if (!currentlyRecording) {
-                    "লোকাল RTSP স্ট্রিম রেকর্ডিং শুরু হয়েছে (${camera.name})"
+                    "${camera.lensCount}টি লেন্সের একসাথে লোকাল রেকর্ডিং শুরু হয়েছে"
                 } else {
-                    "রেকর্ডিং সম্পন্ন ও লোকাল ভল্টে সংরক্ষিত (${camera.name})"
+                    "রেকর্ডিং সম্পন্ন ও লোকাল অ্যালবামে সেভ হয়েছে"
                 }
             )
         }
@@ -406,9 +447,9 @@ class ImouLanViewModel(application: Application) : AndroidViewModel(application)
                         cameraName = camera.name,
                         cameraIp = camera.ipAddress,
                         eventType = "RECORDING",
-                        title = "RTSP ডিরেক্ট স্ট্রিম ক্লিপ সংরক্ষিত",
-                        details = "RTSP Source: ${camera.buildMaskedRtspUrl()} • Direct TCP Packet Dump",
-                        resolution = if (camera.preferredSubtype == 0) "2K H.265 MP4" else "SD H.264 MP4"
+                        title = "${camera.lensCount}-Lens RTSP ভিডিও ক্লিপ সংরক্ষিত",
+                        details = "Channels: 1..${camera.lensCount} • Direct LAN RTSP Stream Dump",
+                        resolution = "${camera.lensCount}-Ch MP4"
                     )
                 )
             }
@@ -422,7 +463,8 @@ class ImouLanViewModel(application: Application) : AndroidViewModel(application)
             val res = lanController.setNightVisionMode(updated, mode)
             _hudState.update {
                 it.copy(
-                    lastCommandFeedback = "NightVision [$mode] -> ${res.endpoint} (${res.summaryMessage})"
+                    lastCommandFeedback = "NightVision [$mode] -> ${res.summaryMessage}",
+                    snackbarMessage = "${camera.name}: নাইট ভিশন '$mode' মোডে সেট হয়েছে"
                 )
             }
         }
@@ -433,11 +475,10 @@ class ImouLanViewModel(application: Application) : AndroidViewModel(application)
             val next = !camera.spotlightActive
             val updated = camera.copy(spotlightActive = next)
             repository.updateCamera(updated)
-            val res = lanController.toggleWhiteLightSpotlight(updated, next)
+            lanController.toggleWhiteLightSpotlight(updated, next)
             _hudState.update {
                 it.copy(
-                    lastCommandFeedback = "Spotlight ${if (next) "ON" else "OFF"} -> ${res.endpoint}",
-                    snackbarMessage = "${camera.name}: ফ্লাডলাইট ${if (next) "চালু" else "বন্ধ"} করা হয়েছে"
+                    snackbarMessage = "${camera.name}: স্পটলাইট ${if (next) "চালু" else "বন্ধ"} করা হয়েছে"
                 )
             }
         }
@@ -456,15 +497,14 @@ class ImouLanViewModel(application: Application) : AndroidViewModel(application)
                         cameraName = camera.name,
                         cameraIp = camera.ipAddress,
                         eventType = "SIREN_TRIGGER",
-                        title = "110dB অ্যাক্টিভ সাইরেন অ্যালার্ম ট্রিগার",
-                        details = "Dahua CoaxialIO Siren Activated on ${camera.ipAddress} (${res.summaryMessage})",
-                        resolution = "ALARM IO=1"
+                        title = "110dB অ্যাক্টিভ সাইরেন ট্রিগার",
+                        details = "Active Deterrence Siren ON (${camera.ipAddress}) • ${res.summaryMessage}",
+                        resolution = "110dB ALARM"
                     )
                 )
             }
             _hudState.update {
                 it.copy(
-                    lastCommandFeedback = "110dB Siren ${if (next) "ACTIVE" else "STOPPED"} -> ${res.endpoint}",
                     snackbarMessage = "${camera.name}: 110dB সাইরেন ${if (next) "বাজছে!" else "বন্ধ করা হয়েছে"}"
                 )
             }
@@ -482,35 +522,18 @@ class ImouLanViewModel(application: Application) : AndroidViewModel(application)
             }
             _hudState.update {
                 it.copy(
-                    snackbarMessage = if (targetState) "সব ক্যামেরায় জরুরি পেরিমিটার সাইরেন চালু হয়েছে!" else "সব ক্যামেরার সাইরেন বন্ধ করা হয়েছে"
+                    snackbarMessage = if (targetState) "সব ক্যামেরায় জরুরি সাইরেন অ্যালার্ম চালু হয়েছে!" else "সব ক্যামেরার সাইরেন বন্ধ করা হয়েছে"
                 )
             }
         }
     }
 
-    fun togglePrivacyMask(camera: ImouCameraEntity) {
+    fun toggleHumanDetect(camera: ImouCameraEntity) {
         viewModelScope.launch {
-            val next = !camera.privacyMaskEnabled
-            repository.updateCamera(camera.copy(privacyMaskEnabled = next))
+            val next = !camera.humanDetectEnabled
+            repository.updateCamera(camera.copy(humanDetectEnabled = next))
             _hudState.update {
-                it.copy(
-                    snackbarMessage = "${camera.name}: প্রাইভেসি শিল্ড ${if (next) "সক্রিয়" else "নিষ্ক্রিয়"}"
-                )
-            }
-        }
-    }
-
-    fun toggleFlip180(camera: ImouCameraEntity) {
-        viewModelScope.launch {
-            val next = !camera.imageFlip180
-            val updated = camera.copy(imageFlip180 = next)
-            repository.updateCamera(updated)
-            val res = lanController.toggleImageFlip180(updated, next)
-            _hudState.update {
-                it.copy(
-                    lastCommandFeedback = "Image Flip 180° = $next (${res.summaryMessage})",
-                    snackbarMessage = "${camera.name}: ১৮০° ইমেজ রোটেশন ${if (next) "চালু" else "বন্ধ"}"
-                )
+                it.copy(snackbarMessage = "হিউম্যান ডিটেকশন ${if (next) "চালু" else "বন্ধ"} হয়েছে")
             }
         }
     }
@@ -520,9 +543,49 @@ class ImouLanViewModel(application: Application) : AndroidViewModel(application)
             val next = !camera.smartTrackingEnabled
             repository.updateCamera(camera.copy(smartTrackingEnabled = next))
             _hudState.update {
-                it.copy(
-                    snackbarMessage = "${camera.name}: স্মার্ট হিউম্যান ট্র্যাকিং ${if (next) "চালু" else "বন্ধ"}"
-                )
+                it.copy(snackbarMessage = "স্মার্ট ট্র্যাকিং ${if (next) "চালু" else "বন্ধ"} হয়েছে")
+            }
+        }
+    }
+
+    fun toggleClick2Track(camera: ImouCameraEntity) {
+        viewModelScope.launch {
+            val next = !camera.click2TrackEnabled
+            repository.updateCamera(camera.copy(click2TrackEnabled = next))
+            _hudState.update {
+                it.copy(snackbarMessage = "Click2Track মাল্টি-লেন্স লিংকেজ ${if (next) "চালু" else "বন্ধ"} হয়েছে")
+            }
+        }
+    }
+
+    fun toggleAutoCruise(camera: ImouCameraEntity) {
+        viewModelScope.launch {
+            val next = !camera.autoCruiseEnabled
+            repository.updateCamera(camera.copy(autoCruiseEnabled = next))
+            _hudState.update {
+                it.copy(snackbarMessage = "৩৬০° অটো ক্রুজ ${if (next) "চালু" else "বন্ধ"} হয়েছে")
+            }
+        }
+    }
+
+    fun togglePrivacyMask(camera: ImouCameraEntity) {
+        viewModelScope.launch {
+            val next = !camera.privacyMaskEnabled
+            repository.updateCamera(camera.copy(privacyMaskEnabled = next))
+            _hudState.update {
+                it.copy(snackbarMessage = "প্রাইভেসি মোড (Lens Hide) ${if (next) "চালু" else "বন্ধ"} হয়েছে")
+            }
+        }
+    }
+
+    fun toggleFlip180(camera: ImouCameraEntity) {
+        viewModelScope.launch {
+            val next = !camera.imageFlip180
+            val updated = camera.copy(imageFlip180 = next)
+            repository.updateCamera(updated)
+            lanController.toggleImageFlip180(updated, next)
+            _hudState.update {
+                it.copy(snackbarMessage = "১৮০° ইমেজ রোটেশন ${if (next) "চালু" else "বন্ধ"} হয়েছে")
             }
         }
     }
@@ -530,20 +593,10 @@ class ImouLanViewModel(application: Application) : AndroidViewModel(application)
     fun rebootCameraOverLan(camera: ImouCameraEntity) {
         viewModelScope.launch {
             val res = lanController.rebootCameraOnLan(camera)
-            repository.logEvent(
-                VaultEventEntity(
-                    cameraId = camera.id,
-                    cameraName = camera.name,
-                    cameraIp = camera.ipAddress,
-                    eventType = "CGI_COMMAND",
-                    title = "LAN রিমোট রিবুট কমান্ড পাঠানো হয়েছে",
-                    details = "GET /cgi-bin/magicBox.cgi?action=reboot (${res.summaryMessage})"
-                )
-            )
             _hudState.update {
                 it.copy(
                     lastCommandFeedback = "Reboot -> /cgi-bin/magicBox.cgi?action=reboot (${res.summaryMessage})",
-                    snackbarMessage = "${camera.name}-এ LAN রিবুট সিগন্যাল পাঠানো হয়েছে"
+                    snackbarMessage = "${camera.name}-এ LAN রিস্টার্ট সিগন্যাল পাঠানো হয়েছে"
                 )
             }
         }
@@ -558,7 +611,7 @@ class ImouLanViewModel(application: Application) : AndroidViewModel(application)
     fun clearAllVaultEvents() {
         viewModelScope.launch {
             repository.clearEvents()
-            _hudState.update { it.copy(snackbarMessage = "ভল্ট লগ পরিষ্কার করা হয়েছে") }
+            _hudState.update { it.copy(snackbarMessage = "মেসেজ ও অ্যালবাম লগ পরিষ্কার করা হয়েছে") }
         }
     }
 }
