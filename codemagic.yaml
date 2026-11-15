@@ -3,10 +3,29 @@ workflows:
     name: Build Native Android APK
     max_build_duration: 30
     instance_type: mac_mini_m2
+    environment:
+      java: 21
     scripts:
-      - name: Set gradlew permissions
-        script: chmod +x gradlew
+      - name: Accept Android SDK Licenses
+        script: |
+          yes | sdkmanager --licenses || true
+      - name: Prepare .env and Debug Keystore
+        script: |
+          if [ ! -f ".env" ]; then
+            cp .env.example .env || touch .env
+          fi
+          if [ -f "debug.keystore.base64" ] && [ ! -s "debug.keystore" ]; then
+            base64 -d debug.keystore.base64 > debug.keystore
+          elif [ ! -f "debug.keystore" ]; then
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
       - name: Build Debug APK
-        script: ./gradlew assembleDebug
+        script: |
+          if [ -f "./gradlew" ]; then
+            chmod +x gradlew
+            ./gradlew assembleDebug --no-daemon
+          else
+            gradle assembleDebug --no-daemon
+          fi
     artifacts:
       - app/build/outputs/**/*.apk
