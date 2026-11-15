@@ -1,28 +1,12 @@
 workflows:
-  web-to-android-apk:
-    name: Build Android APK from Web
+  native-android-apk:
+    name: Build Native Android APK
     max_build_duration: 30
     instance_type: mac_mini_m2
     scripts:
-      - name: Prepare web files
-        script: |
-          mkdir -p www
-          cp -r *.html www/ 2>/dev/null || true
-          cp -r *.css www/ 2>/dev/null || true
-          cp -r *.js www/ 2>/dev/null || true
-          cp -r assets www/ 2>/dev/null || true
-          cp -r src www/ 2>/dev/null || true
-      - name: Initialize Capacitor and add Android
-        script: |
-          npm init -y
-          npm install @capacitor/core @capacitor/cli @capacitor/android
-          npx cap init "IP Camera" "com.rafizul.ipcamera" --web-dir=www
-          npx cap add android
-          npx cap sync android
+      - name: Set gradlew permissions
+        script: chmod +x gradlew
       - name: Build Debug APK
-        script: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug
+        script: ./gradlew assembleDebug
     artifacts:
-      - android/app/build/outputs/**/*.apk
+      - app/build/outputs/**/*.apk
