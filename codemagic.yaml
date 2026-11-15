@@ -1,0 +1,23 @@
+workflows:
+  web-to-android-apk:
+    name: Build Android APK from Web
+    max_build_duration: 30
+    instance_type: mac_mini_m2
+    scripts:
+      - name: Install dependencies and build web app
+        script: |
+          npm install
+          npm run build
+      - name: Initialize Capacitor and add Android
+        script: |
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npx cap init "IP Camera" "com.rafizul.ipcamera" --web-dir=dist
+          npx cap add android
+          npx cap sync android
+      - name: Build Debug APK
+        script: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+    artifacts:
+      - android/app/build/outputs/**/*.apk
