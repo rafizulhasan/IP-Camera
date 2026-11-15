@@ -1,0 +1,6 @@
+{
+  "name": "Imou LAN",
+  "description": "Offline LAN IP camera controller, RTSP quad-stream monitor, ONVIF/CGI PTZ console, and local network scanner for Imou Life cameras in a pitch-black AMOLED theme.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
