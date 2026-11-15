@@ -1,63 +1,40 @@
-name: Build Optimized Release APK
+name: Build Android APK
 
 on:
   push:
-    branches: [ "**" ]
+    branches: [ "main" ]
   workflow_dispatch:
-
-permissions:
-  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
-    env:
-      STORE_PASSWORD: android
-      KEY_PASSWORD: android
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java 17
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
           java-version: '17'
-
-      - name: Generate Release Keystore
-        run: |
-          if [ ! -f "my-upload-key.jks" ]; then
-            keytool -genkey -v -keystore my-upload-key.jks -storepass android -alias upload -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=AI Studio,O=Android,C=US"
-          fi
-
-      - name: Optimize Build Configuration (Shrink & Minify)
-        run: |
-          # অপ্রয়োজনীয় স্ক্রিনশট অ্যাসেট বাদ দেওয়া
-          rm -rf public/assets/aistudio/*.jpg 2>/dev/null || true
-
-          # app/build.gradle.kts-এ R8 shrinking ও PNG compression চালু করা
-          sed -i 's/isCrunchPngs = false/isCrunchPngs = true/g' app/build.gradle.kts
-          sed -i 's/isMinifyEnabled = false/isMinifyEnabled = true\n      isShrinkResources = true/g' app/build.gradle.kts
+          distribution: 'temurin'
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: wrapper
 
-      - name: Build Signed Release APK
+      - name: Build Debug APK
         run: |
           if [ -f "./gradlew" ]; then
             chmod +x gradlew
-            ./gradlew assembleRelease
+            ./gradlew assembleDebug
           else
-            gradle assembleRelease
+            gradle assembleDebug
           fi
 
-      - name: Publish Direct APK to Releases
-        uses: softprops/action-gh-release@v2
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: latest
-          name: "Latest Build (Auto-Updated)"
-          body: "অপ্টিমাইজড ও সাইন করা Release APK।"
-          files: app/build/outputs/apk/release/app-release.apk
-          prerelease: false
+          name: IP-Camera-APK
+          path: app/build/outputs/apk/debug/*.apk
