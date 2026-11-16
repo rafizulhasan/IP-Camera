@@ -1,10 +1,8 @@
-name: Build Android APK
+name: Build Signed Release APK
 
 on:
   push:
-    branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
@@ -15,59 +13,42 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Clean obsolete legacy files if present in branch
-        run: |
-          rm -f app/src/main/java/com/example/ui/screens/LiveMatrixScreen.kt
-          rm -f app/src/main/java/com/example/ui/screens/DedicatedPtzScreen.kt
-          rm -f app/src/main/java/com/example/ui/screens/LanScannerAndGuideScreen.kt
-          rm -f app/src/main/java/com/example/ui/screens/VaultAndLogsScreen.kt
-          rm -f app/src/main/java/com/example/ui/components/RtspCameraViewport.kt
-          rm -f app/src/main/java/com/example/ui/components/PtzJoystickConsole.kt
-          rm -f app/src/main/java/com/example/ui/components/CameraConfigSheets.kt
-
-      - name: Set up JDK 21 (Required for AGP 9.1.1 & Gradle 9.3.1)
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Setup Android SDK & Accept Licenses
-        uses: android-actions/setup-android@v3
-
       - name: Accept Android SDK Licenses
         run: |
-          yes | sdkmanager --licenses || true
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
-      - name: Prepare .env and Keystores
+      - name: Prepare Keystore and Environment
         run: |
-          if [ ! -f ".env" ]; then
-            cp .env.example .env || touch .env
-          fi
-          if [ -f "debug.keystore.base64" ] && [ ! -s "debug.keystore" ]; then
-            base64 -d debug.keystore.base64 > debug.keystore
-          elif [ ! -f "debug.keystore" ]; then
-            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          if [ -f ".env.example" ] && [ ! -f ".env" ]; then
+            cp .env.example .env
           fi
           if [ ! -f "release.keystore" ]; then
-            keytool -genkey -v -keystore release.keystore -storepass android123 -alias releasekey -keypass android123 -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Imou LAN,O=Android,C=BD"
+            keytool -genkey -v -keystore release.keystore -storepass android123 -alias releasekey -keypass android123 -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=IPCamera,O=Android,C=BD"
           fi
+          cp release.keystore debug.keystore 2>/dev/null || true
 
-      - name: Setup Gradle 9.3.1
+      - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
 
-      - name: Build Debug APK
+      - name: Build Signed Release APK
         run: |
           if [ -f "./gradlew" ]; then
             chmod +x gradlew
-            ./gradlew assembleDebug --no-daemon -Djava.awt.headless=true
+            ./gradlew assembleRelease --continue -x lint -x lintVitalRelease
           else
-            gradle assembleDebug --no-daemon -Djava.awt.headless=true
+            gradle assembleRelease --continue -x lint -x lintVitalRelease
           fi
 
-      - name: Upload APK
+      - name: Upload Signed Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: Imou-LAN-Debug-APK
-          path: app/build/outputs/apk/debug/*.apk
+          name: IP-Camera-Release-APK
+          path: app/build/outputs/apk/release/*.apk
