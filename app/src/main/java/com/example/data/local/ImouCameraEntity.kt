@@ -10,12 +10,14 @@ data class ImouCameraEntity(
     val name: String,
     val modelName: String,
     val roomName: String = "আউটডোর",
+    val zoneName: String = "Default",
     val ipAddress: String,
     val rtspPort: Int = 554,
     val httpPort: Int = 80,
     val onvifPort: Int = 80,
     val username: String = "admin",
     val safetyCode: String,
+    val channel: Int = 1,
     // Multi-Lens Configuration (1, 2, or 3 lenses playing simultaneously)
     val lensCount: Int = 2, // 1 = Single PTZ/Fixed, 2 = Dual Lens (Fixed + PTZ), 3 = Triple Lens (2x Fixed Wide + 1x PTZ)
     val lens1Channel: Int = 1,
@@ -63,7 +65,8 @@ data class ImouCameraEntity(
     }
 
     fun buildRtspUrl(subtypeOverride: Int? = null): String {
-        return buildRtspUrlForChannel(lens1Channel, subtypeOverride)
+        val ch = if (channel > 0) channel else lens1Channel
+        return buildRtspUrlForChannel(ch, subtypeOverride)
     }
 
     fun buildMaskedRtspUrl(channelNumber: Int = lens1Channel, subtypeOverride: Int? = null): String {
@@ -78,6 +81,10 @@ data class ImouCameraEntity(
 
     fun buildSnapshotCgiUrl(channelNumber: Int = ptzControlChannel): String {
         return "http://${ipAddress.trim()}:$httpPort/cgi-bin/snapshot.cgi?channel=$channelNumber"
+    }
+
+    fun buildOnvifServiceUrl(): String {
+        return "http://${ipAddress.trim()}:$onvifPort/onvif/device_service"
     }
 
     fun getLensDescriptors(): List<LensDescriptor> {

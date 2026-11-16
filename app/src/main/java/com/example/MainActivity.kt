@@ -49,10 +49,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.local.ImouCameraEntity
+import com.example.data.local.PtzPresetEntity
+import com.example.data.local.VaultEventEntity
 import com.example.ui.ImouLanViewModel
 import com.example.ui.MainNavTab
 import com.example.ui.components.ImouCameraEditorDialog
-import com.example.ui.components.SavePtzPresetDialog
+import com.example.ui.components.ImouSavePresetDialog
 import com.example.ui.screens.ImouHomeScreen
 import com.example.ui.screens.ImouLanCenterScreen
 import com.example.ui.screens.ImouMessagesAndAlbumScreen
@@ -82,9 +84,9 @@ class MainActivity : ComponentActivity() {
 fun ImouSmartLifeLanApp(
     viewModel: ImouLanViewModel = viewModel()
 ) {
-    val cameras by viewModel.cameras.collectAsStateWithLifecycle()
-    val allPresets by viewModel.allPresets.collectAsStateWithLifecycle()
-    val vaultEvents by viewModel.vaultEvents.collectAsStateWithLifecycle()
+    val cameras: List<ImouCameraEntity> by viewModel.cameras.collectAsStateWithLifecycle()
+    val allPresets: List<PtzPresetEntity> by viewModel.allPresets.collectAsStateWithLifecycle()
+    val vaultEvents: List<VaultEventEntity> by viewModel.vaultEvents.collectAsStateWithLifecycle()
     val hudState by viewModel.hudState.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -94,18 +96,18 @@ fun ImouSmartLifeLanApp(
     var prefillIpForEditor by remember { mutableStateOf<String?>(null) }
     var presetSaveCamera by remember { mutableStateOf<ImouCameraEntity?>(null) }
 
-    val selectedCamera = remember(cameras, hudState.selectedCameraId) {
-        cameras.find { it.id == hudState.selectedCameraId } ?: cameras.firstOrNull()
+    val selectedCamera: ImouCameraEntity? = remember(cameras, hudState.selectedCameraId) {
+        cameras.find { cam: ImouCameraEntity -> cam.id == hudState.selectedCameraId } ?: cameras.firstOrNull()
     }
 
-    val presetsForSelected = remember(allPresets, selectedCamera) {
+    val presetsForSelected: List<PtzPresetEntity> = remember(allPresets, selectedCamera) {
         if (selectedCamera == null) emptyList()
-        else allPresets.filter { it.cameraId == selectedCamera.id }
+        else allPresets.filter { preset: PtzPresetEntity -> preset.cameraId == selectedCamera.id }
     }
 
-    val eventsForSelected = remember(vaultEvents, selectedCamera) {
+    val eventsForSelected: List<VaultEventEntity> = remember(vaultEvents, selectedCamera) {
         if (selectedCamera == null) emptyList()
-        else vaultEvents.filter { it.cameraId == selectedCamera.id }
+        else vaultEvents.filter { ev: VaultEventEntity -> ev.cameraId == selectedCamera.id }
     }
 
     LaunchedEffect(hudState.snackbarMessage) {
@@ -116,7 +118,6 @@ fun ImouSmartLifeLanApp(
         }
     }
 
-    // BackHandler on secondary tabs returns to IMOU_HOME
     if (hudState.activeTab != MainNavTab.IMOU_HOME) {
         BackHandler {
             viewModel.selectTab(MainNavTab.IMOU_HOME)
@@ -348,8 +349,11 @@ fun ImouSmartLifeLanApp(
 
     val targetPresetCamera = presetSaveCamera
     if (targetPresetCamera != null) {
-        val nextNum = (presetsForSelected.maxOfOrNull { it.presetNumber } ?: 0) + 1
-        SavePtzPresetDialog(
+        val maxExistingPreset: Int = presetsForSelected.fold(0) { acc: Int, item: PtzPresetEntity ->
+            if (item.presetNumber > acc) item.presetNumber else acc
+        }
+        val nextNum: Int = maxExistingPreset + 1
+        ImouSavePresetDialog(
             camera = targetPresetCamera,
             nextPresetNumber = nextNum,
             onDismiss = { presetSaveCamera = null },

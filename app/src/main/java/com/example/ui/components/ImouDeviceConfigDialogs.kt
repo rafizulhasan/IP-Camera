@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,7 +19,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
@@ -57,7 +55,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.local.ImouCameraEntity
 import com.example.ui.theme.AlertCrimson
-import com.example.ui.theme.CyberCyan
 import com.example.ui.theme.GlassBorder
 import com.example.ui.theme.ImouOrange
 import com.example.ui.theme.ImouOrangeContainer
@@ -67,7 +64,6 @@ import com.example.ui.theme.ObsidianSurface
 import com.example.ui.theme.PitchBlack
 import com.example.ui.theme.TextPureWhite
 import com.example.ui.theme.TextSecondary
-import com.example.ui.theme.WarningAmber
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -93,7 +89,6 @@ fun ImouCameraEditorDialog(
     var safetyCode by remember { mutableStateOf(initialCamera?.safetyCode ?: "L28A9F4C") }
     var showPassword by remember { mutableStateOf(false) }
 
-    // Multi-Lens Configuration (1, 2, or 3 lenses)
     var lensCount by remember { mutableIntStateOf(initialCamera?.lensCount ?: 2) }
     var lens1ChannelText by remember { mutableStateOf((initialCamera?.lens1Channel ?: 1).toString()) }
     var lens2ChannelText by remember { mutableStateOf((initialCamera?.lens2Channel ?: 2).toString()) }
@@ -118,12 +113,14 @@ fun ImouCameraEditorDialog(
             name = name.ifBlank { "Imou LAN Camera" },
             modelName = modelName,
             roomName = roomName.ifBlank { "আউটডোর" },
+            zoneName = roomName.ifBlank { "Default" },
             ipAddress = ipAddress.ifBlank { "$defaultSubnetPrefix.108" },
             rtspPort = rtspPortText.toIntOrNull() ?: 554,
             httpPort = httpPortText.toIntOrNull() ?: 80,
             onvifPort = httpPortText.toIntOrNull() ?: 80,
             username = username.ifBlank { "admin" },
             safetyCode = safetyCode,
+            channel = ch1,
             lensCount = lensCount,
             lens1Channel = ch1,
             lens2Channel = ch2,
@@ -182,7 +179,6 @@ fun ImouCameraEditorDialog(
                     }
                 }
 
-                // Multi-Lens Selector (3-Lens, 2-Lens Dual, 1-Lens)
                 Text(
                     text = "ক্যামেরার লেন্স সংখ্যা নির্বাচন করুন (সব লেন্স একসাথে প্লে হবে):",
                     style = MaterialTheme.typography.labelMedium,
@@ -227,7 +223,6 @@ fun ImouCameraEditorDialog(
                     }
                 }
 
-                // Quick Imou Model Presets
                 val models = listOf(
                     "Imou Cruiser Triple 3-Lens (12MP)",
                     "Imou Cruiser Dual 2 (10MP)",
@@ -372,7 +367,6 @@ fun ImouCameraEditorDialog(
                         .testTag("input_safety_code")
                 )
 
-                // Multi-Lens RTSP Channel Mapping Row
                 Text(
                     text = "লেন্স RTSP চ্যানেল ম্যাপিং (Dahua / Imou Multi-Channel):",
                     style = MaterialTheme.typography.labelMedium,
@@ -424,7 +418,6 @@ fun ImouCameraEditorDialog(
                     )
                 }
 
-                // Live Preview of Multi-Lens RTSP URLs
                 Surface(
                     color = PitchBlack,
                     shape = RoundedCornerShape(12.dp),
@@ -479,7 +472,6 @@ fun ImouCameraEditorDialog(
                     }
                 }
 
-                // Save / Delete Actions
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -524,7 +516,7 @@ fun ImouCameraEditorDialog(
 }
 
 @Composable
-fun SavePtzPresetDialog(
+fun ImouSavePresetDialog(
     camera: ImouCameraEntity,
     nextPresetNumber: Int,
     onDismiss: () -> Unit,

@@ -22,6 +22,11 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+enum class MatrixLayoutMode {
+    SINGLE_FOCUS,
+    QUAD_2X2
+}
+
 enum class MainNavTab {
     IMOU_HOME,
     MULTI_LENS_LIVE,
@@ -31,6 +36,7 @@ enum class MainNavTab {
 
 data class ImouHudUiState(
     val activeTab: MainNavTab = MainNavTab.IMOU_HOME,
+    val layoutMode: MatrixLayoutMode = MatrixLayoutMode.QUAD_2X2,
     val selectedCameraId: Long = 0L,
     val ptzSpeed: Int = 5,
     val recordingCameraIds: Set<Long> = emptySet(),
@@ -82,6 +88,17 @@ class ImouLanViewModel(application: Application) : AndroidViewModel(application)
 
     fun selectTab(tab: MainNavTab) {
         _hudState.update { it.copy(activeTab = tab) }
+    }
+
+    fun toggleMatrixLayoutMode() {
+        _hudState.update { state ->
+            val next = if (state.layoutMode == MatrixLayoutMode.QUAD_2X2) {
+                MatrixLayoutMode.SINGLE_FOCUS
+            } else {
+                MatrixLayoutMode.QUAD_2X2
+            }
+            state.copy(layoutMode = next)
+        }
     }
 
     fun openCameraLiveView(cameraId: Long) {
@@ -215,7 +232,6 @@ class ImouLanViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // Official Imou Life Click2Track (Smart Linkage between Fixed Lens and PTZ Lens)
     fun performClick2Track(camera: ImouCameraEntity, sourceLensIndex: Int, normX: Float, normY: Float) {
         val mappedPan = ((normX - 0.5f) * 240f + if (camera.lensCount == 3 && sourceLensIndex == 1) -40f else if (camera.lensCount == 3 && sourceLensIndex == 2) 40f else 0f)
             .coerceIn(-175f, 175f)
@@ -258,7 +274,6 @@ class ImouLanViewModel(application: Application) : AndroidViewModel(application)
         val newTilt = (camera.tiltAngle + direction.tiltDelta * scale).coerceIn(-30f, 90f)
         val newZoom = (camera.zoomLevel + direction.zoomDelta).coerceIn(1.0f, 8.0f)
 
-        // Also update the Click2Track linkage box position on the fixed lens to stay in sync
         val nextLinkX = (0.5f + (newPan / 240f)).coerceIn(0.1f, 0.9f)
         val nextLinkY = (0.5f - (newTilt / 100f)).coerceIn(0.15f, 0.85f)
 
